@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/stylesheets/style.css">
+</head>
+<body>
+
+    <header>БАЗА ДАННЫХ: АТЛАНТ</header>
+
+    <div style="margin: 15px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <a href="/index.html">
+            <button type="button" style="width: auto;">← НА ГЛАВНУЮ</button>
+        </a>
+
+        <form action="/view" method="GET" style="display: flex; gap: 5px; margin: 0;">
+            <input type="text" name="search" placeholder="Поиск по имени..." value="<%= search %>" style="width: 180px; margin: 0;">
+            
+            <select name="sort" style="width: auto; margin: 0;">
+                <option value="asc" <%= sort === 'asc' ? 'selected' : '' %>>А-Я</option>
+                <option value="desc" <%= sort === 'desc' ? 'selected' : '' %>>Я-А</option>
+            </select>
+            
+            <button type="submit" style="width: auto; margin: 0;">ПРИМЕНИТЬ</button>
+            <a href="/view"><button type="button" style="width: auto; margin: 0;">СБРОС</button></a>
+        </form>
+    </div>
+
+    <div class="form-container">
+        <form id="clientForm">
+            <h3 id="formTitle" style="margin-top:0; text-align:center;">РЕГИСТРАЦИЯ</h3>
+            <input type="hidden" id="clientId">
+            <input type="text" id="name" placeholder="ФИО АТЛЕТА" required>
+            
+            <select id="membership">
+                <option value="Разовый">Разовый</option>
+                <option value="Дневной">Дневной</option>
+                <option value="Безлимит">Безлимит</option>
+                <option value="VIP">VIP</option>
+            </select>
+
+            <div id="statusUpdateSection" style="display:none; border: 1px dashed #000; padding: 5px; margin: 5px 0;">
+                <label style="font-size: 12px;">СТАТУС:</label>
+                <select id="status">
+                    <option value="Действителен">Действителен</option>
+                    <option value="Истек">Истек</option>
+                </select>
+            </div>
+            
+            <button type="submit" id="submitBtn">СОХРАНИТЬ</button>
+            <button type="button" onclick="window.location.hash = ''">ОТМЕНА</button>
+        </form>
+    </div>
+
+    <div style="border-bottom: 2px solid #000; margin: 20px 0;"></div>
+
+    <div id="results">
+        <% items.forEach(function(item) { %>
+            <div class="athlete-card" data-id="<%= item.id %>">
+                <div class="icons">
+                    <button class="icon-btn" onclick="window.location.hash = '#/edit/<%= item.id %>'">✏️</button>
+                    <button class="icon-btn" onclick="deleteItem(<%= item.id %>)">❌</button>
+                </div>
+                <div>
+                    <small>ID: <%= item.id %></small><br>
+                    <b style="text-transform: uppercase;"><%= item.name %></b>
+                    <hr>
+                    ТАРИФ: <%= item.membership %><br>
+                    <span class="status-label">
+                        <%= item.status === 'Действителен' ? '🟢' : '🔴' %> <%= item.status %>
+                    </span>
+                </div>
+            </div>
+        <% }); %>
+    </div>
+
+    <% if (totalPages > 1) { %>
+    <div style="text-align: center; margin: 20px 0;">
+        <% for(let i = 1; i <= totalPages; i++) { %>
+            <a href="/view?page=<%= i %>&search=<%= search %>&sort=<%= sort %>" 
+               style="text-decoration: none; padding: 5px 10px; border: 1px solid #000; margin: 0 2px; 
+                      <%= i === currentPage ? 'background: #000; color: #fff;' : 'color: #000;' %>">
+                <%= i %>
+            </a>
+        <% } %>
+    </div>
+    <% } %>
+
+    <script>
+        async function handleHashChange() {
+            const hash = window.location.hash;
+            if (!hash || hash === '#' || hash === '') {
+                resetFormUI();
+                return;
+            }
+
+            if (hash.startsWith('#/edit/')) {
+                const id = hash.replace('#/edit/', '');
+                try {
+                    const res = await fetch(`/items/${id}`);
+                    if (!res.ok) throw new Error();
+                    const item = await res.json();
+                    
+                    document.getElementById('clientId').value = item.id;
+                    document.getElementById('name').value = item.name;
+                    document.getElementById('membership').value = item.membership;
+                    document.getElementById('statusUpdateSection').style.display = 'block';
+                    document.getElementById('status').value = item.status;
+                    document.getElementById('formTitle').innerText = 'РЕДАКТИРОВАНИЕ (ID ' + id + ')';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } catch (e) {
+                    window.location.hash = '';
+                }
+            }
+        }
+
+        function resetFormUI() {
+            document.getElementById('clientForm').reset();
+            document.getElementById('clientId').value = '';
+            document.getElementById('statusUpdateSection').style.display = 'none';
+            document.getElementById('formTitle').innerText = 'РЕГИСТРАЦИЯ';
+        }
+
+        window.addEventListener('hashchange', handleHashChange);
+        window.addEventListener('load', handleHashChange);
+
+        document.getElementById('clientForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('clientId').value;
+            const data = {
+                name: document.getElementById('name').value,
+                membership: document.getElementById('membership').value
+            };
+            if (id) data.status = document.getElementById('status').value;
+
+            await fetch(id ? `/items/${id}` : '/items', {
+                method: id ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            window.location.hash = '';
+            location.reload(); 
+        };
+
+        async function deleteItem(id) {
+            if (confirm('УДАЛИТЬ?')) {
+                await fetch(`/items/${id}`, { method: 'DELETE' });
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>

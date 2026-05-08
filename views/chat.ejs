@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Support Chat - Atlantis</title>
+    <link rel="stylesheet" href="/stylesheets/style.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        #chat-ui { display: none; } 
+        .client-item { cursor: pointer; padding: 12px; border: 1px solid #000; margin-bottom: 8px; background: #fff; }
+        .active-selection { background: #000 !important; color: #fff; }
+        #messages { height: 350px; border: 2px solid #000; overflow-y: auto; padding: 10px; background: #fff; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <header>ЧАТ ПОДДЕРЖКИ "АТЛАНТ"</header>
+    
+    <div class="form-container" id="auth-box">
+        <input type="text" id="username" placeholder="ВАШЕ ИМЯ" required>
+        <select id="role">
+            <option value="client">Я — КЛИЕНТ</option>
+            <option value="operator">Я — ОПЕРАТОР</option>
+        </select>
+        <button onclick="start()">ВОЙТИ</button>
+    </div>
+
+    <div id="chat-ui" style="max-width: 900px; margin: 20px auto; gap: 20px;">
+        <div id="operator-panel" style="display:none; width: 250px;">
+            <h3 style="margin:0 0 10px 0;">КЛИЕНТЫ</h3>
+            <div id="client-list"></div>
+        </div>
+
+        <div style="flex-grow: 1;">
+            <div id="messages"></div>
+            <div style="display: flex; gap: 5px;">
+                <input type="hidden" id="target-id">
+                <input type="text" id="txt" placeholder="СООБЩЕНИЕ...">
+                <button onclick="sendMsg()" style="width: auto;">ОТПРАВИТЬ</button>
+            </div>
+            <p id="chatting-with" style="font-size: 13px; margin-top: 8px; font-weight: bold;"></p>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let myRole = '';
+        let chatHistories = {}; 
+
+        function start() {
+            const name = document.getElementById('username').value;
+            myRole = document.getElementById('role').value;
+            if(!name) return alert("Имя!");
+            socket.emit('join', { name, role: myRole });
+            document.getElementById('auth-box').style.display = 'none';
+            document.getElementById('chat-ui').style.display = 'flex';
+            if(myRole === 'operator') document.getElementById('operator-panel').style.display = 'block';
+        }
+
+        function selectClient(id, name) {
+            document.getElementById('target-id').value = id;
+            document.getElementById('chatting-with').innerText = "ДИАЛОГ С: " + name;
+            const msgDiv = document.getElementById('messages');
+            msgDiv.innerHTML = '';
+            if (chatHistories[id]) {
+                chatHistories[id].forEach(data => renderMessage(data));
+            }
+            document.querySelectorAll('.client-item').forEach(el => el.classList.remove('active-selection'));
+            event.currentTarget.classList.add('active-selection');
+        }
+
+        function renderMessage(data) {
+            const msgDiv = document.getElementById('messages');
+            msgDiv.innerHTML += `<div><small>[${data.time}]</small> <b>${data.sender}:</b> ${data.text}</div>`;
+            msgDiv.scrollTop = msgDiv.scrollHeight;
+        }
+
+        function sendMsg() {
+            const text = document.getElementById('txt').value;
+            const targetId = document.getElementById('target-id').value;
+            if(myRole === 'operator' && !targetId) return alert("Выбери клиента!");
+            socket.emit('message', { text, targetId: myRole === 'client' ? null : targetId });
+            document.getElementById('txt').value = '';
+        }
+
+        socket.on('receive_message', (data) => {
+            if (myRole === 'operator') {
+                const id = data.clientId;
+                if (!chatHistories[id]) chatHistories[id] = [];
+                chatHistories[id].push(data);
+
+                if (id === document.getElementById('target-id').value) {
+                    renderMessage(data);
+                } else {
+                    console.log("Новое сообщение от " + data.sender + " в фоновом режиме");
+                }
+            } else {
+                renderMessage(data);
+            }
+        });
+
+        socket.on('update_client_list', (clients) => {
+            if (myRole !== 'operator') return;
+            const listDiv = document.getElementById('client-list');
+            listDiv.innerHTML = '';
+            for (const [id, name] of Object.entries(clients)) {
+                const item = document.createElement('div');
+                item.className = 'client-item';
+                item.innerHTML = `<b>${name}</b>`;
+                item.onclick = () => selectClient(id, name);
+                listDiv.appendChild(item);
+            }
+        });
+    </script>
+</body>
+</html>
